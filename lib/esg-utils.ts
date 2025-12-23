@@ -6,11 +6,15 @@ export const CO2_FACTORS: Record<string, number> = {
 };
 
 export interface Metric {
+    id: string;
     category: string;
+    description?: string;
     amount: number;
-    image_url?: string; // Optional URL for receipt image
-    // other fields are optional for calculation
-    [key: string]: any;
+    unit: string;
+    date_logged: string;
+    image_url?: string;
+    user_id: string;
+    created_at: string;
 }
 
 /**

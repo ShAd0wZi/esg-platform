@@ -38,7 +38,7 @@ export default function AddData() {
             const fileExt = file.name.split('.').pop();
             const fileName = `${user.id}/${Date.now()}.${fileExt}`; // Create unique path
 
-            const { data: fileData, error: uploadError } = await supabase
+            const { error: uploadError } = await supabase
                 .storage
                 .from('bills')
                 .upload(fileName, file);
@@ -58,6 +58,16 @@ export default function AddData() {
             uploadedImageUrl = publicUrl;
         }
 
+        // Basic validation & normalization for simple S/G inputs
+        const isCountCategory = ['accidents', 'employees', 'governance_yes', 'governance_total'].includes(category);
+        const numericAmount = isCountCategory ? parseInt(amount, 10) : parseFloat(amount);
+
+        if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+            alert('Please enter a valid non-negative number for Amount.');
+            setLoading(false);
+            return;
+        }
+
         // 2. Save Data to DB
         const { error } = await supabase
             .from('metrics')
@@ -65,7 +75,7 @@ export default function AddData() {
                 {
                     user_id: user.id,
                     category,
-                    amount: parseFloat(amount),
+                    amount: isCountCategory ? numericAmount : parseFloat(amount),
                     unit,
                     description,
                     image_url: uploadedImageUrl // Save the link!
@@ -97,12 +107,31 @@ export default function AddData() {
                             <select
                                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                                 value={category}
-                                onChange={(e) => setCategory(e.target.value)}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setCategory(val);
+                                    // Default unit for simple S/G inputs
+                                    if (val.includes('accident') || val.includes('employee') || val.includes('governance')) {
+                                        setUnit('count');
+                                    } else if (val === 'electricity') {
+                                        setUnit('kwh');
+                                    } else if (val === 'fuel') {
+                                        setUnit('liters');
+                                    } else if (val === 'waste') {
+                                        setUnit('kg');
+                                    } else if (val === 'water') {
+                                        setUnit('liters');
+                                    }
+                                }}
                             >
                                 <option value="electricity">Electricity</option>
                                 <option value="fuel">Fuel / Transport</option>
                                 <option value="waste">Waste</option>
                                 <option value="water">Water</option>
+                                <option value="accidents">Accidents (count)</option>
+                                <option value="employees">Employees (count)</option>
+                                <option value="governance_yes">Governance: Policies = Yes</option>
+                                <option value="governance_total">Governance: Policies = Total</option>
                             </select>
                         </div>
 
@@ -154,7 +183,6 @@ export default function AddData() {
                         <Button type="submit" className="w-full" disabled={loading}>
                             {loading ? "Uploading & Saving..." : "Save Entry"}
                         </Button>
-
                     </form>
                 </CardContent>
             </Card>
