@@ -88,38 +88,51 @@ export default function Dashboard() {
 
 
     useEffect(() => {
+        let isMounted = true;
+
         const fetchData = async () => {
             // 1. Get User
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            if (userError) console.error("Auth Error:", userError);
             if (!user) {
                 router.push("/auth");
                 return;
             }
 
             // 2. Get Company Details
-            const { data: companyData } = await supabase
+            const { data: companyData, error: companyError } = await supabase
                 .from('companies')
                 .select('company_name')
                 .eq('user_id', user.id)
                 .single();
 
-            if (companyData) setCompanyName(companyData.company_name);
+            if (companyError && companyError.code !== 'PGRST116') { // Ignore "Row not found" error for new users
+                 console.error("Company Fetch Error:", companyError);
+            }
+
+            if (isMounted && companyData) setCompanyName(companyData.company_name);
 
             // 3. Get Metrics (The data they entered)
-            const { data: metricsData } = await supabase
+            const { data: metricsData, error: metricsError } = await supabase
                 .from('metrics')
                 .select('*')
                 .eq('user_id', user.id)
                 .order('created_at', { ascending: false });
 
-            if (metricsData) {
+            if (metricsError) console.error("Metrics Fetch Error:", metricsError);
+
+            if (isMounted && metricsData) {
                 setMetrics(metricsData as Metric[]);
             }
 
-            setLoading(false);
+            if (isMounted) setLoading(false);
         };
 
         fetchData();
+
+        return () => {
+            isMounted = false;
+        };
     }, [router]);
 
     const handleLogout = async () => {

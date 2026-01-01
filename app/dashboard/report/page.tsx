@@ -18,33 +18,47 @@ export default function ReportPage() {
     const [totalCO2, setTotalCO2] = useState(0);
 
     useEffect(() => {
+        let isMounted = true;
+
         const fetchData = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user }, error: userError } = await supabase.auth.getUser();
+            if (userError) console.error("Auth Error:", userError);
             if (!user) { router.push("/auth"); return; }
 
             // Get Company Name
-            const { data: companyData } = await supabase
+            const { data: companyData, error: companyError } = await supabase
                 .from('companies')
                 .select('company_name')
                 .eq('user_id', user.id)
                 .single();
-            if (companyData) setCompanyName(companyData.company_name);
+
+            if (companyError && companyError.code !== 'PGRST116') {
+                 console.error("Company Fetch Error:", companyError);
+            }
+
+            if (isMounted && companyData) setCompanyName(companyData.company_name);
 
             // Get Metrics
-            const { data: metricsData } = await supabase
+            const { data: metricsData, error: metricsError } = await supabase
                 .from('metrics')
                 .select('*')
                 .eq('user_id', user.id);
 
-            if (metricsData) {
+            if (metricsError) console.error("Metrics Fetch Error:", metricsError);
+
+            if (isMounted && metricsData) {
                 setMetrics(metricsData);
                 // Calculate Total CO2 using shared logic
                 setTotalCO2(calculateTotalEmissions(metricsData));
             }
-            setLoading(false);
+            if (isMounted) setLoading(false);
         };
 
         fetchData();
+
+        return () => {
+            isMounted = false;
+        };
     }, [router]);
 
     const generatePDF = () => {
