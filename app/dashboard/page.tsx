@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Plus, LogOut, Zap, Flame, Droplets, TrendingUp, CloudFog, Recycle, ShieldAlert, Scale, Trash2 } from "lucide-react";
+import { Plus, LogOut, Zap, Flame, Droplets, TrendingUp, CloudFog, Recycle, ShieldAlert, Scale, Trash2, User, Users } from "lucide-react";
 import { Metric } from "@/lib/esg-utils";
 import { Progress } from "@/components/ui/progress";
 
@@ -23,11 +23,20 @@ export default function Dashboard() {
         .filter(m => m.category === 'electricity')
         .reduce((s, m) => s + (Number(m.amount) || 0), 0);
 
+    // Support both 'fuel' (old) and 'diesel' (new) categories for Diesel
     const diesel = metrics
-        .filter(m => m.category === 'fuel')
+        .filter(m => m.category === 'fuel' || m.category === 'diesel')
         .reduce((s, m) => s + (Number(m.amount) || 0), 0);
 
-    const totalEmissions = (electricity * 0.8) + (diesel * 2.68);
+    const petrol = metrics
+        .filter(m => m.category === 'petrol')
+        .reduce((s, m) => s + (Number(m.amount) || 0), 0);
+
+    // Total Emissions Calculation (tonnes CO2e)
+    // Electricity: 0.8 kg/kWh -> /1000 for tonnes
+    // Diesel: 2.68 kg/L -> /1000 for tonnes
+    // Petrol: 2.31 kg/L -> /1000 for tonnes
+    const totalEmissions = (electricity * 0.8 / 1000) + (diesel * 2.68 / 1000) + (petrol * 2.31 / 1000);
 
     const wasteTotal = metrics
         .filter(m => m.category === 'waste')
@@ -48,6 +57,12 @@ export default function Dashboard() {
     const latestEmployeeMetric = metrics.find(m => m.category === 'employees');
     const employeesTotal = latestEmployeeMetric ? (Number(latestEmployeeMetric.amount) || 0) : 0;
 
+    // Female Share
+    const latestFemaleMetric = metrics.find(m => m.category === 'employees_female');
+    const employeesFemale = latestFemaleMetric ? (Number(latestFemaleMetric.amount) || 0) : 0;
+
+    const femaleSharePct = employeesTotal > 0 ? (employeesFemale / employeesTotal) * 100 : 0;
+
     const accidentRate = employeesTotal > 0 ? (accidentsTotal / employeesTotal) * 100 : 0;
 
     const latestGovYes = metrics.find(m => m.category === 'governance_yes');
@@ -58,8 +73,19 @@ export default function Dashboard() {
 
     const governanceScore = govTotal > 0 ? (govYes / govTotal) * 100 : 0;
 
-    // Mock trend - in real app, calculate from previous period
-    const trend = -12;
+    // Data Completeness Calculation
+    // Required categories: electricity, fuel (diesel/petrol), waste, employees, accidents, governance
+    const hasElectricity = electricity > 0;
+    const hasFuel = diesel > 0 || petrol > 0;
+    const hasWaste = wasteTotal > 0;
+    const hasEmployees = employeesTotal > 0;
+    const hasAccidents = metrics.some(m => m.category === 'accidents'); // Check existence even if 0
+    const hasGovernance = metrics.some(m => m.category.startsWith('governance'));
+
+    const requiredCats = [hasElectricity, hasFuel, hasWaste, hasEmployees, hasAccidents, hasGovernance];
+    const completedCats = requiredCats.filter(Boolean).length;
+    const completenessPct = (completedCats / requiredCats.length) * 100;
+
 
     useEffect(() => {
         const fetchData = async () => {
@@ -88,8 +114,6 @@ export default function Dashboard() {
 
             if (metricsData) {
                 setMetrics(metricsData as Metric[]);
-                // Calculate emissions using shared logic
-
             }
 
             setLoading(false);
@@ -108,20 +132,15 @@ export default function Dashboard() {
     const getIconForCategory = (category: string) => {
         const cat = category.toLowerCase();
         if (cat.includes('electricity') || cat.includes('energy')) return <Zap className="h-5 w-5 text-yellow-600" />;
-        if (cat.includes('fuel') || cat.includes('gas')) return <Flame className="h-5 w-5 text-orange-600" />;
+        if (cat.includes('fuel') || cat.includes('diesel') || cat.includes('petrol')) return <Flame className="h-5 w-5 text-orange-600" />;
         if (cat.includes('water')) return <Droplets className="h-5 w-5 text-blue-600" />;
         if (cat.includes('waste')) {
             if (cat.includes('recycle')) return <Recycle className="h-5 w-5 text-green-600" />;
             return <Trash2 className="h-5 w-5 text-stone-600" />;
         }
+        if (cat.includes('employee') || cat.includes('social')) return <Users className="h-5 w-5 text-purple-600" />;
         return <TrendingUp className="h-5 w-5 text-primary" />;
     };
-
-    // Calculate progress percentage (mock target of 1000 tons)
-    const emissionTarget = 1000;
-
-
-
 
     return (
         <div className="min-h-screen bg-background">
@@ -149,34 +168,31 @@ export default function Dashboard() {
             </header>
 
             <main className="p-8 space-y-8 max-w-7xl mx-auto">
+
+                {/* Data Completeness Bar */}
+                <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm p-4 flex items-center gap-4">
+                    <div className="flex-1">
+                        <div className="flex justify-between mb-2">
+                            <h3 className="text-sm font-medium text-foreground">Data Completeness</h3>
+                            <span className="text-sm text-muted-foreground">{Math.round(completenessPct)}%</span>
+                        </div>
+                        <Progress value={completenessPct} className="h-2" />
+                    </div>
+                </Card>
+
                 {/* Stats Grid */}
                 <div className="grid gap-6 md:grid-cols-4">
                     {/* Estimated Emissions */}
                     <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm relative overflow-hidden">
                         <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Total Est. Emissions</CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Total Emissions</CardTitle>
                             <CloudFog className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="font-serif text-3xl font-bold text-foreground mb-1">
-                                {(totalEmissions / 1000).toFixed(1)} <span className="text-sm font-sans font-normal text-muted-foreground">tCO₂e</span>
+                                {totalEmissions.toFixed(1)} <span className="text-sm font-sans font-normal text-muted-foreground">tCO₂e</span>
                             </div>
                             <p className="text-xs text-muted-foreground">Target: 200 tCO₂e</p>
-                            <Progress value={Math.min((totalEmissions / 1000 / 200) * 100, 100)} className="h-1 mt-2" />
-                        </CardContent>
-                    </Card>
-
-                    {/* Waste Recycled */}
-                    <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm">
-                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Waste Recycled</CardTitle>
-                            <Recycle className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="font-serif text-3xl font-bold text-foreground">{recycleRate.toFixed(1)}%</div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                {wasteRecycled.toLocaleString()} kg / {wasteTotal.toLocaleString()} kg
-                            </p>
                         </CardContent>
                     </Card>
 
@@ -203,6 +219,19 @@ export default function Dashboard() {
                             <p className="text-xs text-muted-foreground mt-1">{govYes} of {govTotal} policies</p>
                         </CardContent>
                     </Card>
+
+                    {/* Female Employees */}
+                    <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm">
+                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Female Employees</CardTitle>
+                            <User className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="font-serif text-3xl font-bold text-foreground">{femaleSharePct.toFixed(0)}%</div>
+                            <p className="text-xs text-muted-foreground mt-1">{employeesFemale} / {employeesTotal}</p>
+                        </CardContent>
+                    </Card>
+
                 </div>
 
                 {/* Recent Activity List */}
@@ -235,7 +264,7 @@ export default function Dashboard() {
                                         )}
                                         <div className="text-right shrink-0 min-w-[100px]">
                                             <p className="font-bold text-lg font-serif">{item.amount} <span className="text-xs font-sans font-normal text-muted-foreground">{item.unit}</span></p>
-                                            <p className="text-xs text-muted-foreground">{new Date(item.date_logged).toLocaleDateString()}</p>
+                                            <p className="text-xs text-muted-foreground">{new Date(item.date_logged || item.created_at).toLocaleDateString()}</p>
                                         </div>
                                     </CardContent>
                                 </Card>
