@@ -14,8 +14,10 @@ export default function Onboarding() {
 
     // Form State
     const [companyName, setCompanyName] = useState("");
+    const [country, setCountry] = useState("");
     const [industry, setIndustry] = useState("");
     const [employees, setEmployees] = useState("");
+    const [reportingYear, setReportingYear] = useState(new Date().getFullYear().toString());
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -37,8 +39,10 @@ export default function Onboarding() {
                 {
                     user_id: user.id,
                     company_name: companyName,
+                    country: country,
                     industry: industry,
-                    employee_count: parseInt(employees)
+                    employee_count: parseInt(employees),
+                    reporting_year: parseInt(reportingYear)
                 }
             ]);
 
@@ -75,6 +79,17 @@ export default function Onboarding() {
                         </div>
 
                         <div className="space-y-2">
+                            <Label htmlFor="country">Country</Label>
+                            <Input
+                                id="country"
+                                placeholder="e.g. Sri Lanka"
+                                value={country}
+                                onChange={(e) => setCountry(e.target.value)}
+                                required
+                            />
+                        </div>
+
+                        <div className="space-y-2">
                             <Label htmlFor="industry">Industry</Label>
                             <Input
                                 id="industry"
@@ -93,6 +108,18 @@ export default function Onboarding() {
                                 placeholder="e.g. 50"
                                 value={employees}
                                 onChange={(e) => setEmployees(e.target.value)}
+                                required
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="year">Reporting Year</Label>
+                            <Input
+                                id="year"
+                                type="number"
+                                placeholder="e.g. 2024"
+                                value={reportingYear}
+                                onChange={(e) => setReportingYear(e.target.value)}
                                 required
                             />
                         </div>

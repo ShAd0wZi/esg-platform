@@ -7,17 +7,46 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { ArrowLeft, UploadCloud } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 export default function AddData() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
 
-    const [category, setCategory] = useState("electricity");
-    const [amount, setAmount] = useState("");
-    const [unit, setUnit] = useState("kwh");
+    // --- State for all inputs ---
+
+    // Environmental
+    const [electricity, setElectricity] = useState("");
+    const [diesel, setDiesel] = useState("");
+    const [wasteGeneral, setWasteGeneral] = useState("");
+    const [wasteRecycled, setWasteRecycled] = useState("");
+
+    // Social
+    const [employeesFemale, setEmployeesFemale] = useState("");
+    const [employeesMale, setEmployeesMale] = useState("");
+    const [employeesPermanent, setEmployeesPermanent] = useState("");
+    const [employeesContract, setEmployeesContract] = useState("");
+    const [accidentsRecordable, setAccidentsRecordable] = useState("0");
+    const [accidentsFatalities, setAccidentsFatalities] = useState("0");
+
+    // Governance (Toggles - store as boolean)
+    const [govCodeConduct, setGovCodeConduct] = useState(false);
+    const [govAntiBribery, setGovAntiBribery] = useState(false);
+    const [govWhistleblower, setGovWhistleblower] = useState(false);
+    const [govDataPrivacy, setGovDataPrivacy] = useState(false);
+    const [govBoardOversight, setGovBoardOversight] = useState(false);
+    const [govSupplierCode, setGovSupplierCode] = useState(false);
+
+    // Common
     const [description, setDescription] = useState("");
-    const [file, setFile] = useState<File | null>(null);
+
+    // Calculations for UI feedback
+    const elecCo2 = (parseFloat(electricity) || 0) * 0.8;
+    const dieselCo2 = (parseFloat(diesel) || 0) * 2.68;
+    const totalEmissions = elecCo2 + dieselCo2;
+
+    const totalEmployees = (parseInt(employeesFemale) || 0) + (parseInt(employeesMale) || 0);
+    const totalWaste = (parseFloat(wasteGeneral) || 0) + (parseFloat(wasteRecycled) || 0);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -31,56 +60,48 @@ export default function AddData() {
             return;
         }
 
-        let uploadedImageUrl = null;
+        // Prepare batch data
+        // We will map our specific inputs to "category" strings that the dashboard expects.
+        // Dashboard expects:
+        // 'electricity', 'fuel' (diesel), 'waste', 'waste_recycled'
+        // 'employees', 'accidents'
+        // 'governance_yes' (count of yes), 'governance_total' (total policies checked - usually 6)
 
-        // 1. Handle File Upload if exists
-        if (file) {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${user.id}/${Date.now()}.${fileExt}`; // Create unique path
+        // Correction: The previous dashboard prompt implies we store granular data.
+        // However, to fit existing schema (category, amount, unit), we will create multiple rows.
 
-            const { error: uploadError } = await supabase
-                .storage
-                .from('bills')
-                .upload(fileName, file);
+        const entries = [];
+        const timestamp = new Date().toISOString();
 
-            if (uploadError) {
-                alert("Upload failed: " + uploadError.message);
-                setLoading(false);
-                return;
-            }
+        // 1. Environmental
+        if (electricity) entries.push({ user_id: user.id, category: 'electricity', amount: parseFloat(electricity), unit: 'kWh', description, created_at: timestamp });
+        if (diesel) entries.push({ user_id: user.id, category: 'fuel', amount: parseFloat(diesel), unit: 'liters', description, created_at: timestamp });
+        if (totalWaste > 0) entries.push({ user_id: user.id, category: 'waste', amount: totalWaste, unit: 'kg', description, created_at: timestamp });
+        if (wasteRecycled) entries.push({ user_id: user.id, category: 'waste_recycled', amount: parseFloat(wasteRecycled), unit: 'kg', description, created_at: timestamp });
 
-            // Get the Public URL
-            const { data: { publicUrl } } = supabase
-                .storage
-                .from('bills')
-                .getPublicUrl(fileName);
+        // 2. Social
+        if (totalEmployees > 0) entries.push({ user_id: user.id, category: 'employees', amount: totalEmployees, unit: 'count', description, created_at: timestamp });
+        if (employeesFemale) entries.push({ user_id: user.id, category: 'employees_female', amount: parseInt(employeesFemale), unit: 'count', description, created_at: timestamp });
+        if (parseInt(accidentsRecordable) >= 0) entries.push({ user_id: user.id, category: 'accidents', amount: parseInt(accidentsRecordable), unit: 'count', description, created_at: timestamp });
 
-            uploadedImageUrl = publicUrl;
-        }
+        // 3. Governance
+        // We will calculate the score here or store raw "Yes" counts.
+        // Let's store the total Yes count and the Total policies count so we can calc % later.
+        let yesCount = 0;
+        if (govCodeConduct) yesCount++;
+        if (govAntiBribery) yesCount++;
+        if (govWhistleblower) yesCount++;
+        if (govDataPrivacy) yesCount++;
+        if (govBoardOversight) yesCount++;
+        if (govSupplierCode) yesCount++;
 
-        // Basic validation & normalization for simple S/G inputs
-        const isCountCategory = ['accidents', 'employees', 'governance_yes', 'governance_total'].includes(category);
-        const numericAmount = isCountCategory ? parseInt(amount, 10) : parseFloat(amount);
+        entries.push({ user_id: user.id, category: 'governance_yes', amount: yesCount, unit: 'count', description, created_at: timestamp });
+        entries.push({ user_id: user.id, category: 'governance_total', amount: 6, unit: 'count', description, created_at: timestamp });
 
-        if (!Number.isFinite(numericAmount) || numericAmount < 0) {
-            alert('Please enter a valid non-negative number for Amount.');
-            setLoading(false);
-            return;
-        }
 
-        // 2. Save Data to DB
         const { error } = await supabase
             .from('metrics')
-            .insert([
-                {
-                    user_id: user.id,
-                    category,
-                    amount: isCountCategory ? numericAmount : parseFloat(amount),
-                    unit,
-                    description,
-                    image_url: uploadedImageUrl // Save the link!
-                }
-            ]);
+            .insert(entries);
 
         if (error) {
             alert("Error: " + error.message);
@@ -92,88 +113,117 @@ export default function AddData() {
 
     return (
         <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-            <Card className="w-full max-w-md">
+            <Card className="w-full max-w-2xl my-8">
                 <CardHeader className="flex flex-row items-center gap-4">
                     <Button variant="ghost" size="icon" onClick={() => router.back()}>
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
-                    <CardTitle>Log ESG Data</CardTitle>
+                    <CardTitle>Log Comprehensive ESG Data</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
+                    <form onSubmit={handleSubmit} className="space-y-8">
 
-                        <div className="space-y-2">
-                            <Label>Category</Label>
-                            <select
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                                value={category}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    setCategory(val);
-                                    // Default unit for simple S/G inputs
-                                    if (val.includes('accident') || val.includes('employee') || val.includes('governance')) {
-                                        setUnit('count');
-                                    } else if (val === 'electricity') {
-                                        setUnit('kwh');
-                                    } else if (val === 'fuel') {
-                                        setUnit('liters');
-                                    } else if (val === 'waste') {
-                                        setUnit('kg');
-                                    } else if (val === 'water') {
-                                        setUnit('liters');
-                                    }
-                                }}
-                            >
-                                <option value="electricity">Electricity</option>
-                                <option value="fuel">Fuel / Transport</option>
-                                <option value="waste">Waste</option>
-                                <option value="water">Water</option>
-                                <option value="accidents">Accidents (count)</option>
-                                <option value="employees">Employees (count)</option>
-                                <option value="governance_yes">Governance: Policies = Yes</option>
-                                <option value="governance_total">Governance: Policies = Total</option>
-                            </select>
-                        </div>
+                        {/* Section 1: Environmental */}
+                        <div className="space-y-4 border-b pb-4">
+                            <h3 className="font-semibold text-lg text-slate-800">Environmental Data</h3>
 
-                        <div className="flex gap-4">
-                            <div className="w-2/3 space-y-2">
-                                <Label>Amount</Label>
-                                <Input
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="0.00"
-                                    value={amount}
-                                    onChange={(e) => setAmount(e.target.value)}
-                                    required
-                                />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Electricity Consumption (kWh)</Label>
+                                    <Input type="number" value={electricity} onChange={e => setElectricity(e.target.value)} placeholder="0" />
+                                    <p className="text-xs text-muted-foreground">Est. {elecCo2.toLocaleString()} kg CO₂e</p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Diesel Consumption (Liters)</Label>
+                                    <Input type="number" value={diesel} onChange={e => setDiesel(e.target.value)} placeholder="0" />
+                                    <p className="text-xs text-muted-foreground">Est. {dieselCo2.toLocaleString()} kg CO₂e</p>
+                                </div>
                             </div>
-                            <div className="w-1/3 space-y-2">
-                                <Label>Unit</Label>
-                                <Input
-                                    value={unit}
-                                    onChange={(e) => setUnit(e.target.value)}
-                                    placeholder="kwh"
-                                    required
-                                />
+
+                            <div className="p-3 bg-slate-100 rounded-md text-sm font-medium text-slate-700">
+                                Total Estimated Emissions: {totalEmissions.toLocaleString()} kg CO₂e ({(totalEmissions / 1000).toFixed(2)} tCO₂e)
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>General Waste (kg)</Label>
+                                    <Input type="number" value={wasteGeneral} onChange={e => setWasteGeneral(e.target.value)} placeholder="0" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Recycled Waste (kg)</Label>
+                                    <Input type="number" value={wasteRecycled} onChange={e => setWasteRecycled(e.target.value)} placeholder="0" />
+                                </div>
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label>Proof (Optional)</Label>
-                            <div className="flex items-center gap-2 rounded-md border border-dashed p-4">
-                                <UploadCloud className="h-5 w-5 text-slate-400" />
-                                <Input
-                                    type="file"
-                                    className="border-0 bg-transparent p-0 text-sm file:mr-4 file:rounded-full file:border-0 file:bg-slate-100 file:px-4 file:py-2 file:text-xs file:font-semibold hover:file:bg-slate-200"
-                                    onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)}
-                                />
+                        {/* Section 2: Social */}
+                        <div className="space-y-4 border-b pb-4">
+                            <h3 className="font-semibold text-lg text-slate-800">Social Data</h3>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Female Employees</Label>
+                                    <Input type="number" value={employeesFemale} onChange={e => setEmployeesFemale(e.target.value)} placeholder="0" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Male Employees</Label>
+                                    <Input type="number" value={employeesMale} onChange={e => setEmployeesMale(e.target.value)} placeholder="0" />
+                                </div>
+                            </div>
+                            <div className="text-sm text-muted-foreground">Total Employees: {totalEmployees}</div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Permanent Staff</Label>
+                                    <Input type="number" value={employeesPermanent} onChange={e => setEmployeesPermanent(e.target.value)} placeholder="0" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Contract Staff</Label>
+                                    <Input type="number" value={employeesContract} onChange={e => setEmployeesContract(e.target.value)} placeholder="0" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Workplace Accidents (Recordable)</Label>
+                                <Input type="number" value={accidentsRecordable} onChange={e => setAccidentsRecordable(e.target.value)} placeholder="0" />
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label>Description / Month</Label>
+                        {/* Section 3: Governance */}
+                        <div className="space-y-4">
+                            <h3 className="font-semibold text-lg text-slate-800">Governance Policies</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <label className="flex items-center space-x-2 border p-2 rounded cursor-pointer hover:bg-slate-50">
+                                    <input type="checkbox" checked={govCodeConduct} onChange={e => setGovCodeConduct(e.target.checked)} className="h-4 w-4" />
+                                    <span className="text-sm">Code of Conduct</span>
+                                </label>
+                                <label className="flex items-center space-x-2 border p-2 rounded cursor-pointer hover:bg-slate-50">
+                                    <input type="checkbox" checked={govAntiBribery} onChange={e => setGovAntiBribery(e.target.checked)} className="h-4 w-4" />
+                                    <span className="text-sm">Anti-bribery Policy</span>
+                                </label>
+                                <label className="flex items-center space-x-2 border p-2 rounded cursor-pointer hover:bg-slate-50">
+                                    <input type="checkbox" checked={govWhistleblower} onChange={e => setGovWhistleblower(e.target.checked)} className="h-4 w-4" />
+                                    <span className="text-sm">Whistleblower Channel</span>
+                                </label>
+                                <label className="flex items-center space-x-2 border p-2 rounded cursor-pointer hover:bg-slate-50">
+                                    <input type="checkbox" checked={govDataPrivacy} onChange={e => setGovDataPrivacy(e.target.checked)} className="h-4 w-4" />
+                                    <span className="text-sm">Data Protection Policy</span>
+                                </label>
+                                <label className="flex items-center space-x-2 border p-2 rounded cursor-pointer hover:bg-slate-50">
+                                    <input type="checkbox" checked={govBoardOversight} onChange={e => setGovBoardOversight(e.target.checked)} className="h-4 w-4" />
+                                    <span className="text-sm">Board Oversight of ESG</span>
+                                </label>
+                                <label className="flex items-center space-x-2 border p-2 rounded cursor-pointer hover:bg-slate-50">
+                                    <input type="checkbox" checked={govSupplierCode} onChange={e => setGovSupplierCode(e.target.checked)} className="h-4 w-4" />
+                                    <span className="text-sm">Supplier Code of Conduct</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2 pt-4 border-t">
+                            <Label>Description / Month for this Report</Label>
                             <Input
-                                placeholder="e.g. January Office Bill"
+                                placeholder="e.g. 2024 Annual Report Data"
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 required
@@ -181,7 +231,7 @@ export default function AddData() {
                         </div>
 
                         <Button type="submit" className="w-full" disabled={loading}>
-                            {loading ? "Uploading & Saving..." : "Save Entry"}
+                            {loading ? "Saving Batch Data..." : "Submit All Data"}
                         </Button>
                     </form>
                 </CardContent>

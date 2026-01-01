@@ -6,11 +6,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Plus, LogOut, Zap, Flame, Droplets, TrendingUp, ArrowDownRight, ArrowUpRight, CloudRain } from "lucide-react";
-import { calculateTotalEmissions, Metric } from "@/lib/esg-utils";
+import { Plus, LogOut, Zap, Flame, Droplets, TrendingUp } from "lucide-react";
+import { Metric } from "@/lib/esg-utils";
 import { Progress } from "@/components/ui/progress";
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
     const router = useRouter();
@@ -18,25 +16,51 @@ export default function Dashboard() {
     const [companyName, setCompanyName] = useState("");
     const [metrics, setMetrics] = useState<Metric[]>([]);
 
-    // Derived KPI values (accidents, employees, governance)
+    // Derived KPI values
+    const electricity = metrics
+        .filter(m => m.category === 'electricity')
+        .reduce((s, m) => s + (Number(m.amount) || 0), 0);
+
+    const diesel = metrics
+        .filter(m => m.category === 'fuel')
+        .reduce((s, m) => s + (Number(m.amount) || 0), 0);
+
+    // Emissions: (Elec * 0.8) + (Diesel * 2.68)
+    const totalEmissions = (electricity * 0.8) + (diesel * 2.68);
+
+    const wasteTotal = metrics
+        .filter(m => m.category === 'waste')
+        .reduce((s, m) => s + (Number(m.amount) || 0), 0);
+
+    const wasteRecycled = metrics
+        .filter(m => m.category === 'waste_recycled')
+        .reduce((s, m) => s + (Number(m.amount) || 0), 0);
+
+    const recycleRate = wasteTotal > 0 ? (wasteRecycled / wasteTotal) * 100 : 0;
+
     const accidentsTotal = metrics
-        .filter(m => m.category?.toLowerCase().includes('accident'))
+        .filter(m => m.category === 'accidents')
         .reduce((s, m) => s + (Number(m.amount) || 0), 0);
 
+    // We take the latest employee count entry or sum if they are additive (assuming latest snapshot for now or sum if data is monthly)
+    // For simplicity, let's sum them up but usually employee count is a status not a flow. 
+    // However, to keep it simple with existing "summing" logic:
     const employeesTotal = metrics
-        .filter(m => m.category?.toLowerCase().includes('employee'))
+        .filter(m => m.category === 'employees')
         .reduce((s, m) => s + (Number(m.amount) || 0), 0);
 
-    const governanceYes = metrics
-        .filter(m => m.category?.toLowerCase().includes('governance_yes'))
+    // Accident Rate %
+    const accidentRate = employeesTotal > 0 ? (accidentsTotal / employeesTotal) * 100 : 0;
+
+    const govYes = metrics
+        .filter(m => m.category === 'governance_yes')
         .reduce((s, m) => s + (Number(m.amount) || 0), 0);
 
-    const governanceTotal = metrics
-        .filter(m => m.category?.toLowerCase().includes('governance_total'))
+    const govTotal = metrics
+        .filter(m => m.category === 'governance_total')
         .reduce((s, m) => s + (Number(m.amount) || 0), 0);
 
-    const accidentRatePer100 = employeesTotal > 0 ? (accidentsTotal / employeesTotal) * 100 : 0;
-    const governanceScore = governanceTotal > 0 ? (governanceYes / governanceTotal) * 100 : 0;
+    const governanceScore = govTotal > 0 ? (govYes / govTotal) * 100 : 0;
 
     // Mock trend - in real app, calculate from previous period
     const trend = -12;
@@ -97,9 +121,7 @@ export default function Dashboard() {
     const emissionTarget = 1000;
 
 
-    // Basic emissions KPI: only electricity + fuel (buyer-focused simple estimate)
-    const basicEmissions = calculateTotalEmissions(metrics.filter(m => ['electricity', 'fuel'].includes(m.category.toLowerCase())));
-    const basicEmissionProgress = Math.min((basicEmissions / emissionTarget) * 100, 100);
+
 
     return (
         <div className="min-h-screen bg-background">
@@ -128,55 +150,53 @@ export default function Dashboard() {
 
             <main className="p-8 space-y-8 max-w-7xl mx-auto">
                 {/* Stats Grid */}
-                <div className="grid gap-6 md:grid-cols-3">
+                <div className="grid gap-6 md:grid-cols-4">
                     {/* Estimated Emissions */}
                     <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                            <CloudRain className="w-32 h-32 text-primary" />
-                        </div>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
-                                Est. Carbon Footprint
-                                <Badge variant="outline" className={cn("ml-2 font-normal", trend < 0 ? "text-emerald-600 border-emerald-200 bg-emerald-50" : "text-rose-600 border-rose-200 bg-rose-50")}>
-                                    {trend < 0 ? <ArrowDownRight className="mr-1 h-3 w-3" /> : <ArrowUpRight className="mr-1 h-3 w-3" />}
-                                    {Math.abs(trend)}% from last month
-                                </Badge>
-                            </CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Total Est. Emissions</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="font-serif text-4xl font-bold text-foreground mb-2">
-                                {basicEmissions.toFixed(2)} <span className="text-lg font-sans font-normal text-muted-foreground">Tons CO₂e</span>
+                            <div className="font-serif text-3xl font-bold text-foreground mb-1">
+                                {(totalEmissions / 1000).toFixed(1)} <span className="text-sm font-sans font-normal text-muted-foreground">tCO₂e</span>
                             </div>
-                            <p className="text-sm text-muted-foreground mb-3">Estimated emissions (basic total based on electricity + fuel)</p>
-                            <div className="space-y-1">
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                    <span>Progress to Limit ({emissionTarget} Tons)</span>
-                                    <span>{basicEmissionProgress.toFixed(0)}%</span>
-                                </div>
-                                <Progress value={basicEmissionProgress} className="h-2" />
-                            </div>
+                            <p className="text-xs text-muted-foreground">Target: 200 tCO₂e</p>
+                            <Progress value={Math.min((totalEmissions / 1000 / 200) * 100, 100)} className="h-1 mt-2" />
+                        </CardContent>
+                    </Card>
+
+                    {/* Waste Recycled */}
+                    <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">Waste Recycled</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="font-serif text-3xl font-bold text-foreground">{recycleRate.toFixed(1)}%</div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {wasteRecycled.toLocaleString()} kg / {wasteTotal.toLocaleString()} kg
+                            </p>
                         </CardContent>
                     </Card>
 
                     {/* Accident Rate */}
-                    <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm flex flex-col justify-between">
+                    <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Accident Rate</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="font-serif text-3xl font-bold text-foreground">{accidentRatePer100 > 0 ? accidentRatePer100.toFixed(2) : 'N/A'}</div>
-                            <p className="text-sm text-muted-foreground mt-1">Accidents per 100 employees</p>
+                            <div className="font-serif text-3xl font-bold text-foreground">{accidentRate.toFixed(1)}%</div>
+                            <p className="text-xs text-muted-foreground mt-1">{accidentsTotal} accidents / {employeesTotal} employees</p>
                         </CardContent>
                     </Card>
 
                     {/* Governance Score */}
-                    <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm flex flex-col justify-between">
+                    <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Governance Score</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="font-serif text-3xl font-bold text-foreground">{governanceTotal > 0 ? `${governanceScore.toFixed(0)}%` : 'N/A'}</div>
-                            <p className="text-sm text-muted-foreground mt-1">% of policies toggled to Yes</p>
+                            <div className="font-serif text-3xl font-bold text-foreground">{governanceScore.toFixed(0)}%</div>
+                            <p className="text-xs text-muted-foreground mt-1">{govYes} of {govTotal} policies</p>
                         </CardContent>
                     </Card>
                 </div>
