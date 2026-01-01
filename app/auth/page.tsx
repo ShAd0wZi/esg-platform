@@ -22,12 +22,13 @@ export default function AuthPage() {
         });
 
         if (error) {
+            console.error("Sign Up Error:", error);
             alert("Error: " + error.message);
+            setLoading(false);
         } else {
             alert("Account created! Logging you in...");
             router.push("/onboarding"); // Send them to create company profile
         }
-        setLoading(false);
     };
 
     const handleSignIn = async () => {
@@ -38,11 +39,12 @@ export default function AuthPage() {
         });
 
         if (error) {
+            console.error("Sign In Error:", error);
             alert("Login failed: " + error.message);
+            setLoading(false);
         } else {
             router.push("/dashboard"); // If they already have an account, go to dash
         }
-        setLoading(false);
     };
 
     return (

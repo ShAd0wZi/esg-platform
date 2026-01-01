@@ -60,24 +60,39 @@ export default function AddData() {
 
     // Helpers
     const uploadFile = async (file: File, userId: string): Promise<string | null> => {
-        const fileExt = file.name.split('.').pop();
+        const parts = file.name.split('.');
+        const fileExt = parts.length > 1 ? parts.pop() : 'bin';
         const fileName = `${userId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
         const { error } = await supabase.storage.from('bills').upload(fileName, file);
         if (error) {
             console.error("Upload failed", error);
+            alert(`Failed to upload ${file.name}: ${error.message}`);
             return null;
         }
         const { data } = supabase.storage.from('bills').getPublicUrl(fileName);
         return data.publicUrl;
     };
 
+    const parseNumber = (val: string): number | null => {
+        if (!val) return null;
+        const num = parseFloat(val);
+        return isNaN(num) ? null : num;
+    };
+
+    const parseIntSafe = (val: string): number | null => {
+        if (!val) return null;
+        const num = parseInt(val, 10);
+        return isNaN(num) ? null : num;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
 
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-        if (!user) {
+        if (userError || !user) {
+            console.error("Auth Error:", userError);
             alert("Please login");
             router.push("/auth");
             return;
@@ -100,42 +115,62 @@ export default function AddData() {
         const timestamp = new Date().toISOString();
 
         // 1. Environmental
-        if (electricity) entries.push({ user_id: user.id, category: 'electricity', amount: parseFloat(electricity), unit: 'kWh', description, image_url: urlElec, created_at: timestamp });
+        const elecVal = parseNumber(electricity);
+        if (elecVal !== null) entries.push({ user_id: user.id, category: 'electricity', amount: elecVal, unit: 'kWh', description, image_url: urlElec, created_at: timestamp });
         
         // Fuel split
-        if (diesel) entries.push({ user_id: user.id, category: 'diesel', amount: parseFloat(diesel), unit: 'liters', description, image_url: urlFuel, created_at: timestamp });
-        if (petrol) entries.push({ user_id: user.id, category: 'petrol', amount: parseFloat(petrol), unit: 'liters', description, image_url: urlFuel, created_at: timestamp });
+        const dieselVal = parseNumber(diesel);
+        if (dieselVal !== null) entries.push({ user_id: user.id, category: 'diesel', amount: dieselVal, unit: 'liters', description, image_url: urlFuel, created_at: timestamp });
+        const petrolVal = parseNumber(petrol);
+        if (petrolVal !== null) entries.push({ user_id: user.id, category: 'petrol', amount: petrolVal, unit: 'liters', description, image_url: urlFuel, created_at: timestamp });
         
-        if (otherFuel) entries.push({ user_id: user.id, category: 'fuel_other', amount: parseFloat(otherFuel), unit: otherFuelUnit, description, created_at: timestamp });
+        const otherFuelVal = parseNumber(otherFuel);
+        if (otherFuelVal !== null) entries.push({ user_id: user.id, category: 'fuel_other', amount: otherFuelVal, unit: otherFuelUnit, description, created_at: timestamp });
 
         // Water
-        if (water) entries.push({ user_id: user.id, category: 'water', amount: parseFloat(water), unit: 'm3', description, image_url: urlWater, created_at: timestamp });
+        const waterVal = parseNumber(water);
+        if (waterVal !== null) entries.push({ user_id: user.id, category: 'water', amount: waterVal, unit: 'm3', description, image_url: urlWater, created_at: timestamp });
 
         // Waste
-        const wTotal = (parseFloat(wasteGeneral) || 0) + (parseFloat(wasteRecycled) || 0) + (parseFloat(wasteHazardous) || 0);
+        const wGen = parseNumber(wasteGeneral) || 0;
+        const wRec = parseNumber(wasteRecycled) || 0;
+        const wHaz = parseNumber(wasteHazardous) || 0;
+
+        const wTotal = wGen + wRec + wHaz;
         if (wTotal > 0) entries.push({ user_id: user.id, category: 'waste', amount: wTotal, unit: 'kg', description, image_url: urlWaste, created_at: timestamp });
-        if (wasteRecycled) entries.push({ user_id: user.id, category: 'waste_recycled', amount: parseFloat(wasteRecycled), unit: 'kg', description, created_at: timestamp });
-        if (wasteHazardous) entries.push({ user_id: user.id, category: 'hazardous_waste', amount: parseFloat(wasteHazardous), unit: 'kg', description, created_at: timestamp }); // Updated key name
+        if (wRec > 0) entries.push({ user_id: user.id, category: 'waste_recycled', amount: wRec, unit: 'kg', description, created_at: timestamp });
+        if (wHaz > 0) entries.push({ user_id: user.id, category: 'hazardous_waste', amount: wHaz, unit: 'kg', description, created_at: timestamp });
 
         // 2. Social
-        if (employeesTotal) {
-            entries.push({ user_id: user.id, category: 'employees', amount: parseInt(employeesTotal), unit: 'count', description, created_at: timestamp });
+        const empTotal = parseIntSafe(employeesTotal);
+        const empFem = parseIntSafe(employeesFemale);
+        const empMale = parseIntSafe(employeesMale);
+        const empOther = parseIntSafe(employeesOther);
+        const empPerm = parseIntSafe(employeesPermanent);
+        const empContract = parseIntSafe(employeesContract);
+
+        if (empTotal !== null) {
+            entries.push({ user_id: user.id, category: 'employees', amount: empTotal, unit: 'count', description, created_at: timestamp });
         } else {
             // Fallback calc if total not explicitly entered but parts are
-            const sumEmp = (parseInt(employeesFemale) || 0) + (parseInt(employeesMale) || 0) + (parseInt(employeesOther) || 0);
+            const sumEmp = (empFem || 0) + (empMale || 0) + (empOther || 0);
             if (sumEmp > 0) entries.push({ user_id: user.id, category: 'employees', amount: sumEmp, unit: 'count', description, created_at: timestamp });
         }
 
-        if (employeesFemale) entries.push({ user_id: user.id, category: 'employees_female', amount: parseInt(employeesFemale), unit: 'count', description, created_at: timestamp });
-        if (employeesMale) entries.push({ user_id: user.id, category: 'employees_male', amount: parseInt(employeesMale), unit: 'count', description, created_at: timestamp });
-        if (employeesOther) entries.push({ user_id: user.id, category: 'employees_other', amount: parseInt(employeesOther), unit: 'count', description, created_at: timestamp });
+        if (empFem !== null) entries.push({ user_id: user.id, category: 'employees_female', amount: empFem, unit: 'count', description, created_at: timestamp });
+        if (empMale !== null) entries.push({ user_id: user.id, category: 'employees_male', amount: empMale, unit: 'count', description, created_at: timestamp });
+        if (empOther !== null) entries.push({ user_id: user.id, category: 'employees_other', amount: empOther, unit: 'count', description, created_at: timestamp });
         
-        if (employeesPermanent) entries.push({ user_id: user.id, category: 'employees_permanent', amount: parseInt(employeesPermanent), unit: 'count', description, created_at: timestamp });
-        if (employeesContract) entries.push({ user_id: user.id, category: 'employees_contract', amount: parseInt(employeesContract), unit: 'count', description, created_at: timestamp });
+        if (empPerm !== null) entries.push({ user_id: user.id, category: 'employees_permanent', amount: empPerm, unit: 'count', description, created_at: timestamp });
+        if (empContract !== null) entries.push({ user_id: user.id, category: 'employees_contract', amount: empContract, unit: 'count', description, created_at: timestamp });
 
-        if (parseInt(accidentsRecordable) >= 0) entries.push({ user_id: user.id, category: 'accidents', amount: parseInt(accidentsRecordable), unit: 'count', description, created_at: timestamp });
-        if (parseInt(accidentsLostTime) >= 0) entries.push({ user_id: user.id, category: 'lost_time_injuries', amount: parseInt(accidentsLostTime), unit: 'count', description, created_at: timestamp });
-        if (parseInt(accidentsFatalities) >= 0) entries.push({ user_id: user.id, category: 'fatalities', amount: parseInt(accidentsFatalities), unit: 'count', description, created_at: timestamp });
+        const accRec = parseIntSafe(accidentsRecordable);
+        const accLost = parseIntSafe(accidentsLostTime);
+        const accFat = parseIntSafe(accidentsFatalities);
+
+        if (accRec !== null && accRec >= 0) entries.push({ user_id: user.id, category: 'accidents', amount: accRec, unit: 'count', description, created_at: timestamp });
+        if (accLost !== null && accLost >= 0) entries.push({ user_id: user.id, category: 'lost_time_injuries', amount: accLost, unit: 'count', description, created_at: timestamp });
+        if (accFat !== null && accFat >= 0) entries.push({ user_id: user.id, category: 'fatalities', amount: accFat, unit: 'count', description, created_at: timestamp });
 
         // 3. Governance
         let yesCount = 0;
@@ -149,17 +184,23 @@ export default function AddData() {
         entries.push({ user_id: user.id, category: 'governance_yes', amount: yesCount, unit: 'count', description, image_url: urlGov, created_at: timestamp });
         entries.push({ user_id: user.id, category: 'governance_total', amount: 6, unit: 'count', description, created_at: timestamp });
 
+        if (entries.length === 0) {
+             alert("No valid data entered to save.");
+             setLoading(false);
+             return;
+        }
 
         const { error } = await supabase
             .from('metrics')
             .insert(entries);
 
         if (error) {
+            console.error("Insert Error:", error);
             alert("Error: " + error.message);
+            setLoading(false);
         } else {
             router.push("/dashboard");
         }
-        setLoading(false);
     };
 
     return (

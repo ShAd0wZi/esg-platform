@@ -27,6 +27,7 @@ export default function Onboarding() {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
 
         if (userError || !user) {
+            console.error("Auth Error:", userError);
             alert("Error: You must be logged in!");
             setLoading(false);
             return;
@@ -47,14 +48,14 @@ export default function Onboarding() {
             ]);
 
         if (error) {
-            console.error(error);
+            console.error("Insert Error:", error);
             alert("Error saving profile: " + error.message);
+            setLoading(false);
         } else {
             // Success! Redirect to dashboard (we will build this next)
             alert("Company Profile Created!");
             router.push("/dashboard");
         }
-        setLoading(false);
     };
 
     return (
