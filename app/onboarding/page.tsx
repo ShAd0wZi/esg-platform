@@ -90,7 +90,7 @@ export default function Onboarding() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="industry">Industry</Label>
+                            <Label htmlFor="industry">Industry Sector</Label>
                             <Input
                                 id="industry"
                                 placeholder="e.g. Manufacturing"

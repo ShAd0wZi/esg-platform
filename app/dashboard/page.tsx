@@ -17,6 +17,8 @@ export default function Dashboard() {
     const [metrics, setMetrics] = useState<Metric[]>([]);
 
     // Derived KPI values
+
+    // Flows (Sum up over time)
     const electricity = metrics
         .filter(m => m.category === 'electricity')
         .reduce((s, m) => s + (Number(m.amount) || 0), 0);
@@ -25,7 +27,6 @@ export default function Dashboard() {
         .filter(m => m.category === 'fuel')
         .reduce((s, m) => s + (Number(m.amount) || 0), 0);
 
-    // Emissions: (Elec * 0.8) + (Diesel * 2.68)
     const totalEmissions = (electricity * 0.8) + (diesel * 2.68);
 
     const wasteTotal = metrics
@@ -42,23 +43,18 @@ export default function Dashboard() {
         .filter(m => m.category === 'accidents')
         .reduce((s, m) => s + (Number(m.amount) || 0), 0);
 
-    // We take the latest employee count entry or sum if they are additive (assuming latest snapshot for now or sum if data is monthly)
-    // For simplicity, let's sum them up but usually employee count is a status not a flow. 
-    // However, to keep it simple with existing "summing" logic:
-    const employeesTotal = metrics
-        .filter(m => m.category === 'employees')
-        .reduce((s, m) => s + (Number(m.amount) || 0), 0);
+    // Stocks (Status at a point in time) -> Take the most recent entry
+    // Metrics are ordered by created_at desc in fetch
+    const latestEmployeeMetric = metrics.find(m => m.category === 'employees');
+    const employeesTotal = latestEmployeeMetric ? (Number(latestEmployeeMetric.amount) || 0) : 0;
 
-    // Accident Rate %
     const accidentRate = employeesTotal > 0 ? (accidentsTotal / employeesTotal) * 100 : 0;
 
-    const govYes = metrics
-        .filter(m => m.category === 'governance_yes')
-        .reduce((s, m) => s + (Number(m.amount) || 0), 0);
+    const latestGovYes = metrics.find(m => m.category === 'governance_yes');
+    const govYes = latestGovYes ? (Number(latestGovYes.amount) || 0) : 0;
 
-    const govTotal = metrics
-        .filter(m => m.category === 'governance_total')
-        .reduce((s, m) => s + (Number(m.amount) || 0), 0);
+    const latestGovTotal = metrics.find(m => m.category === 'governance_total');
+    const govTotal = latestGovTotal ? (Number(latestGovTotal.amount) || 6) : 6;
 
     const governanceScore = govTotal > 0 ? (govYes / govTotal) * 100 : 0;
 

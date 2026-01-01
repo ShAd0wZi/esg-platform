@@ -1,6 +1,6 @@
 export const CO2_FACTORS: Record<string, number> = {
-    electricity: 0.5, // kg CO2 per kWh
-    fuel: 2.3,        // kg CO2 per Liter
+    electricity: 0.8, // kg CO2 per kWh
+    fuel: 2.68,       // kg CO2 per Liter
     waste: 1.2,       // kg CO2 per kg
     water: 0.001      // kg CO2 per Liter
 };
