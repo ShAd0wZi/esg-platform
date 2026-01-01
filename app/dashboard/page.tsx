@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Plus, LogOut, Zap, Flame, Droplets, TrendingUp } from "lucide-react";
+import { Plus, LogOut, Zap, Flame, Droplets, TrendingUp, CloudFog, Recycle, ShieldAlert, Scale, Trash2 } from "lucide-react";
 import { Metric } from "@/lib/esg-utils";
 import { Progress } from "@/components/ui/progress";
 
@@ -110,6 +110,10 @@ export default function Dashboard() {
         if (cat.includes('electricity') || cat.includes('energy')) return <Zap className="h-5 w-5 text-yellow-600" />;
         if (cat.includes('fuel') || cat.includes('gas')) return <Flame className="h-5 w-5 text-orange-600" />;
         if (cat.includes('water')) return <Droplets className="h-5 w-5 text-blue-600" />;
+        if (cat.includes('waste')) {
+            if (cat.includes('recycle')) return <Recycle className="h-5 w-5 text-green-600" />;
+            return <Trash2 className="h-5 w-5 text-stone-600" />;
+        }
         return <TrendingUp className="h-5 w-5 text-primary" />;
     };
 
@@ -149,8 +153,9 @@ export default function Dashboard() {
                 <div className="grid gap-6 md:grid-cols-4">
                     {/* Estimated Emissions */}
                     <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm relative overflow-hidden">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Total Est. Emissions</CardTitle>
+                            <CloudFog className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="font-serif text-3xl font-bold text-foreground mb-1">
@@ -163,8 +168,9 @@ export default function Dashboard() {
 
                     {/* Waste Recycled */}
                     <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Waste Recycled</CardTitle>
+                            <Recycle className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="font-serif text-3xl font-bold text-foreground">{recycleRate.toFixed(1)}%</div>
@@ -176,8 +182,9 @@ export default function Dashboard() {
 
                     {/* Accident Rate */}
                     <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Accident Rate</CardTitle>
+                            <ShieldAlert className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="font-serif text-3xl font-bold text-foreground">{accidentRate.toFixed(1)}%</div>
@@ -187,8 +194,9 @@ export default function Dashboard() {
 
                     {/* Governance Score */}
                     <Card className="shadow-sm border-border/60 bg-card/50 backdrop-blur-sm">
-                        <CardHeader className="pb-2">
+                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
                             <CardTitle className="text-sm font-medium text-muted-foreground">Governance Score</CardTitle>
+                            <Scale className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="font-serif text-3xl font-bold text-foreground">{governanceScore.toFixed(0)}%</div>
